@@ -16,12 +16,13 @@ export function renderProfile(host, ctx) {
     clear(wrap);
     const u = me();
 
-    // header
+    // header (tap to edit)
     wrap.append(el("div.card", {}, [
-      el("div.profile-head", {}, [
+      el("div.profile-head", { style: "cursor:pointer", onclick: openEditSheet, title: "Edit profile" }, [
         avatar(u, "lg"),
         el("div.username", {}, [u.username]),
         el("div.gender-badge", {}, [genderLabel(u.gender) + " · " + u.email]),
+        el("div.small", { style: "color:var(--pink);font-weight:700;margin-top:2px" }, ["✏️ Tap to edit"]),
       ]),
     ]));
 

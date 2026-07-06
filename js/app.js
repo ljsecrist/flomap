@@ -100,7 +100,7 @@ function renderAuth() {
   const wrap = el("div.auth-wrap");
 
   function paint() {
-    clear(wrap).append(
+    const nodes = [
       el("div.auth-hero", {}, [
         el("div.brand-word", {}, ["FloMap"]),
         el("p", {}, ["Track your flow, together 🩸"]),
@@ -109,9 +109,9 @@ function renderAuth() {
         el("button", { class: mode === "login" ? "active" : "", onclick: () => { mode = "login"; paint(); } }, ["Log in"]),
         el("button", { class: mode === "signup" ? "active" : "", onclick: () => { mode = "signup"; paint(); } }, ["Sign up"]),
       ]),
-      mode === "login" ? loginForm() : null,
-      mode === "signup" ? signupWizard() : null,
-    );
+      mode === "login" ? loginForm() : signupWizard(),
+    ];
+    clear(wrap).append(...nodes);
   }
   paint();
   clear(root()).append(wrap);
