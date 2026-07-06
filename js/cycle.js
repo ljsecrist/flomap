@@ -10,7 +10,7 @@
 export const PHASES = {
   period:     { key: "period",     label: "Period",     color: "#e0356b" },
   fertile:    { key: "fertile",    label: "Fertile",    color: "#28b3a6" },
-  ovulation:  { key: "ovulation",  label: "Ovulation",  color: "#0e9c8e" },
+  ovulation:  { key: "ovulation",  label: "Ovulation",  color: "#3b6fe0" },
   follicular: { key: "follicular", label: "Follicular", color: "#f4a6c0" },
   luteal:     { key: "luteal",     label: "Luteal",     color: "#c79be0" },
 };

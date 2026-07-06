@@ -9,7 +9,7 @@
   --pink-soft:   #ffe3ee;
   --pink-tint:   #fff5f9;
   --teal:        #28b3a6;   /* fertile */
-  --teal-deep:   #0e9c8e;   /* ovulation */
+  --ovulation:   #3b6fe0;   /* ovulation (distinct blue, not teal) */
   --follicular:  #f4a6c0;
   --luteal:      #c79be0;
 
@@ -173,7 +173,7 @@ a { color: var(--pink); }
 /* my-phase tint fills the cell */
 .cell.p-period     { background: var(--pink); color: #fff; }
 .cell.p-fertile    { background: var(--teal); color: #fff; }
-.cell.p-ovulation  { background: var(--teal-deep); color: #fff; }
+.cell.p-ovulation  { background: var(--ovulation); color: #fff; }
 .cell.p-follicular { background: var(--follicular); }
 .cell.p-luteal     { background: var(--luteal); }
 .cell .dots { display: flex; gap: 3px; margin-top: 3px; z-index: 2; height: 6px; align-items: center; }
