@@ -81,7 +81,7 @@ export function renderCalendar(host, ctx) {
         ]),
         weekHeader(),
         grid(),
-        legend(),
+        legend(deriods.length > 0),
       ])
     );
 
@@ -128,7 +128,7 @@ export function renderCalendar(host, ctx) {
     }
   }
 
-  function legend() {
+  function legend(hasDeriods) {
     const item = (color, label) => el("span", {}, [ el("i", { style: `background:${color}` }), label ]);
     return el("div.legend", {}, [
       item(ctx.PHASES.period.color, "Period"),
@@ -136,7 +136,7 @@ export function renderCalendar(host, ctx) {
       item(ctx.PHASES.ovulation.color, "Ovulation"),
       item(ctx.PHASES.follicular.color, "Follicular"),
       item(ctx.PHASES.luteal.color, "Luteal"),
-      el("span", {}, ["💪 Deriod"]),
+      hasDeriods ? el("span", {}, ["💪 Deriod"]) : null,
       el("span", {}, ["💬 Chat"]),
     ]);
   }
