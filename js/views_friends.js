@@ -12,35 +12,68 @@ export function renderFriends(host, ctx) {
   async function paint() {
     clear(wrap);
 
-    // --- add friend ---
-    const input = el("input", { placeholder: "Add a friend by username", autocapitalize: "none", autocomplete: "off" });
-    const addBtn = el("button.btn.auto", {}, ["Add"]);
+    // --- find & add friends (live search) ---
+    const input = el("input", {
+      placeholder: "Search people by name…", autocapitalize: "none",
+      autocomplete: "off", autocorrect: "off", spellcheck: false,
+    });
     const err = el("div.error-msg");
+    const results = el("div.search-results");
 
-    const doAdd = async () => {
-      const uname = input.value.trim();
+    let searchTimer, searchSeq = 0;
+    input.addEventListener("input", () => {
+      clearTimeout(searchTimer);
+      const q = input.value.trim();
       err.textContent = "";
-      if (!uname) return;
-      if (uname.toLowerCase() === me.username.toLowerCase()) return err.textContent = "That's you!";
-      addBtn.disabled = true;
+      if (!q) { clear(results); return; }
+      results.innerHTML = `<p class="small muted" style="margin-top:10px">Searching…</p>`;
+      searchTimer = setTimeout(() => runSearch(q), 220);
+    });
+
+    async function runSearch(q) {
+      const seq = ++searchSeq;
+      let found = [];
+      try { found = await db.searchUsers(q, me.id, 8); }
+      catch (e) { err.textContent = e.message; clear(results); return; }
+      if (seq !== searchSeq) return; // a newer keystroke superseded this one
+      clear(results);
+      if (!found.length) {
+        results.append(el("p.small.muted", { style: "margin-top:10px" }, [`No members match “${q}”.`]));
+        return;
+      }
+      for (const u of found) results.append(resultRow(u));
+    }
+
+    function resultRow(u) {
+      const isFriend = state.friends.some(f => f.id === u.id);
+      const btn = isFriend
+        ? el("span.small.muted", {}, ["Friends ✓"])
+        : el("button.btn.small.auto", {}, ["Add"]);
+      if (!isFriend) btn.addEventListener("click", () => addFriend(u, btn));
+      return el("div.list-item", {}, [
+        avatar(u, "md"),
+        el("div.grow", {}, [ el("div.name", {}, [u.username]) ]),
+        btn,
+      ]);
+    }
+
+    async function addFriend(u, btn) {
+      btn.disabled = true; btn.textContent = "…";
       try {
-        const target = await db.findUserByUsername(uname);
-        if (!target) { err.textContent = "No user with that username."; addBtn.disabled = false; return; }
-        const res = await db.sendFriendRequest(me.id, target.id);
-        input.value = "";
-        if (res.autoAccepted) { toast(`You're now friends with ${target.username}! 🎉`); await ctx.reloadNetwork(); }
-        else toast(`Friend request sent to ${target.username}`);
+        const res = await db.sendFriendRequest(me.id, u.id);
+        if (res.autoAccepted) { toast(`You're now friends with ${u.username}! 🎉`); await ctx.reloadNetwork(); }
+        else toast(`Request sent to ${u.username}`);
+        btn.replaceWith(el("span.small.muted", {}, [res.autoAccepted ? "Friends ✓" : "Requested"]));
         await refresh();
-      } catch (e) { err.textContent = e.message; }
-      addBtn.disabled = false;
-    };
-    addBtn.addEventListener("click", doAdd);
-    input.addEventListener("keydown", e => { if (e.key === "Enter") doAdd(); });
+      } catch (e) { toast(e.message, true); btn.disabled = false; btn.textContent = "Add"; }
+    }
 
     wrap.append(el("div.card", {}, [
-      el("h2", {}, ["Add a friend"]),
-      el("div.row", {}, [ input, addBtn ]),
+      el("h2", {}, ["Find friends"]),
+      input,
+      el("p.small.muted", { style: "margin-top:6px" }, ["Type part of a username — no need to get it exact."]),
       err,
+      results,
     ]));
 
     // placeholders that get filled async

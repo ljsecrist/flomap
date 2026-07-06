@@ -29,6 +29,20 @@ export async function findUserByUsername(username) {
   return data;
 }
 
+/** Fuzzy member search by partial username (case-insensitive). Excludes self. */
+export async function searchUsers(query, excludeId, limit = 8) {
+  const q = String(query || "").trim().replace(/[%_]/g, "\\$&"); // escape LIKE wildcards
+  if (!q) return [];
+  const { data, error } = await supabase
+    .from("users").select("id, username, avatar_url, gender")
+    .ilike("username", `%${q}%`)
+    .neq("id", excludeId)
+    .order("username", { ascending: true })
+    .limit(limit);
+  must(error);
+  return data;
+}
+
 export async function getUser(id) {
   const { data, error } = await supabase
     .from("users").select("*").eq("id", id).maybeSingle();
