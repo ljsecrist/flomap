@@ -302,3 +302,8 @@ a { color: var(--pink); }
 .link-btn { background: none; border: none; color: var(--pink); font-weight: 700; font-size: 14px; padding: 6px; }
 .setup-note { background: var(--pink-tint); border: 1px solid var(--pink-soft); border-radius: var(--radius); padding: 16px; font-size: 14px; }
 .setup-note code { background: var(--pink-soft); padding: 1px 6px; border-radius: 6px; font-size: 13px; }
+
+/* --- image cropper ------------------------------------------------------- */
+.cropper-view { box-shadow: 0 0 0 3px var(--pink) inset; }
+.cropper-ring { position: absolute; inset: 0; border-radius: 50%; pointer-events: none;
+  box-shadow: 0 0 0 2000px rgba(0,0,0,.28); }

@@ -110,6 +110,17 @@ begin
 end $$;
 
 -- ============================================================================
+-- Grants: the public API role (`anon`) needs table privileges, otherwise every
+-- request fails with "permission denied for table ...". RLS (above) is what
+-- actually controls access; these grants just let the role reach the tables.
+-- ============================================================================
+grant usage on schema public to anon, authenticated;
+grant all privileges on all tables    in schema public to anon, authenticated;
+grant all privileges on all sequences in schema public to anon, authenticated;
+alter default privileges in schema public grant all on tables    to anon, authenticated;
+alter default privileges in schema public grant all on sequences to anon, authenticated;
+
+-- ============================================================================
 -- Done. Your FloMap backend is ready. Copy your Project URL + anon key into
 -- js/config.js and open the app.
 -- ============================================================================

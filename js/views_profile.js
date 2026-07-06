@@ -119,7 +119,10 @@ export function renderProfile(host, ctx) {
       file.addEventListener("change", async () => {
         if (!file.files[0]) return;
         try {
-          avatarData = await ctx.fileToDataURL(file.files[0], 400, 0.8);
+          const cropped = await ctx.cropImageFile(file.files[0], { size: 400 });
+          file.value = "";
+          if (!cropped) return;
+          avatarData = cropped;
           preview.replaceWith((preview = avatar({ username: uname.value, avatar_url: avatarData }, "lg")));
         } catch (e) { toast(e.message, true); }
       });

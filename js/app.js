@@ -5,7 +5,7 @@
 import { isConfigured } from "./config.js";
 import * as auth from "./auth.js";
 import * as db from "./db.js";
-import { fileToDataURL } from "./image.js";
+import { fileToDataURL, cropImageFile } from "./image.js";
 import {
   toISO, toDate, addDays, daysBetween, phaseFor, PHASES,
   dayInCycle, nextPeriodStart, daysUntilNextPeriod,
@@ -221,7 +221,10 @@ function signupWizard() {
     file.addEventListener("change", async () => {
       if (!file.files[0]) return;
       try {
-        data.avatar_url = await fileToDataURL(file.files[0], 400, 0.8);
+        const cropped = await cropImageFile(file.files[0], { size: 400 });
+        file.value = ""; // allow re-picking the same file
+        if (!cropped) return; // user cancelled
+        data.avatar_url = cropped;
         const fresh = avatar({ username: uname.value || "?", avatar_url: data.avatar_url }, "lg");
         preview.replaceWith(fresh);
       } catch (e) { toast(e.message, true); }
@@ -363,7 +366,7 @@ function ctx() {
     state, db, auth,
     phaseFor, dayInCycle, nextPeriodStart, daysUntilNextPeriod, daysBetween, addDays, toISO, toDate,
     PHASES, el, clear, avatar, toast, openSheet, timeAgo, MONTHS, WEEKDAYS, prettyDate, escapeHTML,
-    fileToDataURL, clampInt, hasCycle,
+    fileToDataURL, cropImageFile, clampInt, hasCycle,
     reloadNetwork: async () => { await loadNetwork(); },
     repaint: () => paintView(),
     rerender: () => renderApp(),
