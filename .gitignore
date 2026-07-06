@@ -1,0 +1,11 @@
+# Claude Code local workspace
+.claude/
+
+# Dependencies (none needed at runtime, but just in case)
+node_modules/
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+*.log
+.vscode/
