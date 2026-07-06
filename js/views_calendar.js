@@ -105,11 +105,11 @@ export function renderCalendar(host, ctx) {
           el("span.daynum", {}, [String(d)]),
         ]);
 
-        // friend indicators: dots for friends in period / fertile that day
+        // friend indicators: a colored dot for each friend's phase that day
         const dots = [];
         for (const f of state.friends) {
           const p = computePhase(f, date);
-          if (p && (p.isPeriod || p.isFertile || p.isOvulation)) {
+          if (p) {
             dots.push(el("i", { style: `background:${p.color}`, title: `${f.username}: ${p.label}` }));
           }
           if (dots.length >= 4) break;
