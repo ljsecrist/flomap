@@ -136,12 +136,11 @@ export function renderFriends(host, ctx) {
 
     function phaseLine(f) {
       if (f.gender === "male") return el("div.small.muted", {}, ["No cycle tracked 💪"]);
-      const anchor = state.anchors[f.id];
-      if (!anchor) return el("div.small.muted", {}, ["Cycle not set"]);
-      const p = ctx.phaseFor(anchor, f.cycle_length, f.period_length, new Date());
+      const p = ctx.phaseOf(f, new Date());
+      if (!p) return el("div.small.muted", {}, ["Cycle not set"]);
       return el("div.small", {}, [
         el("span.chip", { style: `background:${p.color};font-size:11px` }, [p.label]),
-        el("span.muted", { style: "margin-left:6px" }, [`day ${p.day}`]),
+        el("span.muted", { style: "margin-left:6px" }, [p.manual ? "logged ✍️" : `day ${p.day}`]),
       ]);
     }
 

@@ -26,6 +26,7 @@ create table if not exists public.users (
   gender        text not null default 'female' check (gender in ('female','male','other')),
   cycle_length  int  not null default 28,      -- average full-cycle length in days
   period_length int  not null default 5,       -- average bleeding days
+  luteal_length int  not null default 14,      -- learned ovulation-to-period gap
   created_at    timestamptz not null default now()
 );
 
@@ -41,6 +42,19 @@ create table if not exists public.period_starts (
   unique (user_id, start_date)
 );
 create index if not exists period_starts_user_idx on public.period_starts(user_id, start_date desc);
+
+-- ----------------------------------------------------------------------------
+-- CYCLE EVENTS  (manually logged phase segments; override predictions + train)
+-- ----------------------------------------------------------------------------
+create table if not exists public.cycle_events (
+  id         uuid primary key default gen_random_uuid(),
+  user_id    uuid not null references public.users(id) on delete cascade,
+  phase      text not null check (phase in ('period','fertile','ovulation','follicular','luteal')),
+  start_date date not null,
+  end_date   date not null,
+  created_at timestamptz not null default now()
+);
+create index if not exists cycle_events_user_idx on public.cycle_events(user_id, start_date desc);
 
 -- ----------------------------------------------------------------------------
 -- FRIENDSHIPS  (one row per relationship; direction = requester -> addressee)
@@ -92,6 +106,7 @@ create index if not exists deriods_day_idx on public.deriods(day);
 -- ============================================================================
 alter table public.users         enable row level security;
 alter table public.period_starts enable row level security;
+alter table public.cycle_events  enable row level security;
 alter table public.friendships   enable row level security;
 alter table public.comments      enable row level security;
 alter table public.deriods       enable row level security;
@@ -99,7 +114,7 @@ alter table public.deriods       enable row level security;
 do $$
 declare t text;
 begin
-  foreach t in array array['users','period_starts','friendships','comments','deriods']
+  foreach t in array array['users','period_starts','cycle_events','friendships','comments','deriods']
   loop
     execute format('drop policy if exists "allow_all_%s" on public.%I;', t, t);
     execute format(

@@ -5,6 +5,7 @@ import {
   toISO, daysBetween, addDays,
   dayInCycle, currentCycleStart, nextPeriodStart,
   phaseFor, daysUntilNextPeriod,
+  findManualPhase, manualPhaseInfo, learnCycleParams,
 } from "../js/cycle.js";
 
 let passed = 0, failed = 0;
@@ -47,6 +48,39 @@ eq(phaseFor(ANCHOR, LEN, PERIOD, "2026-01-20").phase, "luteal", "day20 = luteal"
 // --- daysUntilNextPeriod ---
 eq(daysUntilNextPeriod(ANCHOR, LEN, "2026-01-01"), 0, "on period => 0 days");
 eq(daysUntilNextPeriod(ANCHOR, LEN, "2026-01-28"), 1, "day 28 => 1 day until period");
+
+// --- learned luteal length shifts ovulation ---
+// default luteal 14 => ovulation day 14
+eq(phaseFor(ANCHOR, LEN, PERIOD, "2026-01-14").isOvulation, true, "default ovulation day 14");
+// luteal 10 => ovulation day 28-10 = 18
+eq(phaseFor(ANCHOR, LEN, PERIOD, "2026-01-18", 10).isOvulation, true, "luteal 10 => ovulation day 18");
+eq(phaseFor(ANCHOR, LEN, PERIOD, "2026-01-14", 10).isOvulation, false, "day 14 not ovulation when luteal 10");
+
+// --- manual overrides ---
+const events = [
+  { phase: "ovulation", start_date: "2026-01-09", end_date: "2026-01-09" },
+  { phase: "period",    start_date: "2026-01-20", end_date: "2026-01-24" },
+];
+eq(findManualPhase(events, "2026-01-09")?.phase, "ovulation", "finds ovulation override");
+eq(findManualPhase(events, "2026-01-22")?.phase, "period", "finds period override range");
+eq(findManualPhase(events, "2026-01-15"), null, "no override on uncovered day");
+eq(manualPhaseInfo(events[0], "2026-01-09").isFertile, true, "manual ovulation is fertile");
+eq(manualPhaseInfo(events[1], "2026-01-22").day, 3, "manual period day-in-segment");
+
+// --- learning from logged history ---
+const base = { cycle_length: 28, period_length: 5, luteal_length: 14 };
+// starts 30 days apart => learned cycle_length 30
+eq(learnCycleParams(["2026-01-01", "2026-01-31"], [], base).cycle_length, 30, "learns cycle length from Day-1 gaps");
+// one start => not enough to learn, keep current
+eq(learnCycleParams(["2026-01-01"], [], base).cycle_length, 28, "single start keeps current cycle length");
+// period segment of 6 days => learned period_length 6
+eq(learnCycleParams(["2026-01-01"],
+  [{ phase: "period", start_date: "2026-01-01", end_date: "2026-01-06" }], base).period_length, 6, "learns period length from segment");
+// ovulation on day 12 with cycle 28 => luteal = 28 - 12 = 16
+eq(learnCycleParams(["2026-01-01"],
+  [{ phase: "ovulation", start_date: "2026-01-12", end_date: "2026-01-12" }], base).luteal_length, 16, "learns luteal length from ovulation");
+// averages multiple gaps (28 and 30 => 29)
+eq(learnCycleParams(["2026-01-01", "2026-01-29", "2026-02-28"], [], base).cycle_length, 29, "averages multiple cycle gaps");
 
 // --- robustness: bad inputs fall back to defaults, never throw ---
 eq(dayInCycle(ANCHOR, 0, "2026-01-29"), 1, "cycleLength 0 falls back to 28");

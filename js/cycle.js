@@ -79,17 +79,19 @@ export function nextPeriodStart(anchor, cycleLength, date) {
 
 /**
  * Classify a date into a cycle phase.
- * Luteal phase is assumed ~14 days, so ovulation ≈ cycleLength - 14.
- * Fertile window = 5 days before ovulation through 1 day after.
+ * Ovulation ≈ cycleLength - lutealLength (luteal defaults to ~14 days, but is
+ * learned per-user from logged ovulation). Fertile window = 5 days before
+ * ovulation through 1 day after.
  *
  * Returns { phase, label, color, day, ovulationDay, isPeriod, isFertile }.
  */
-export function phaseFor(anchor, cycleLength, periodLength, date) {
+export function phaseFor(anchor, cycleLength, periodLength, date, lutealLength = 14) {
   const len = clampLen(cycleLength);
   const pLen = clampPeriod(periodLength, len);
   const day = dayInCycle(anchor, len, date);
 
-  const ovulationDay = Math.max(pLen + 1, len - 14); // never inside the period
+  // never inside the period, never on the last day
+  const ovulationDay = Math.min(len - 1, Math.max(pLen + 1, len - clampLuteal(lutealLength)));
   const fertileStart = ovulationDay - 5;
   const fertileEnd = ovulationDay + 1;
 
@@ -136,4 +138,90 @@ function clampPeriod(p, cycleLen) {
   const n = Math.round(Number(p));
   if (!Number.isFinite(n) || n < 1) return 5;
   return Math.min(n, Math.max(1, cycleLen - 10));
+}
+function clampLuteal(l) {
+  const n = Math.round(Number(l));
+  if (!Number.isFinite(n) || n < 9) return 14;
+  return Math.min(n, 17);
+}
+
+// --- manual overrides -------------------------------------------------------
+// A manual log ("I ovulated Jul 15") wins over the prediction for the days it
+// covers. `events` = [{ phase, start_date, end_date }] (ISO date strings).
+
+/** The manual event covering `date`, if any (most recently logged wins). */
+export function findManualPhase(events, date) {
+  if (!events || !events.length) return null;
+  const iso = toISO(date);
+  let best = null;
+  for (const e of events) {
+    if (iso >= e.start_date && iso <= e.end_date) {
+      if (!best || e.start_date >= best.start_date) best = e;
+    }
+  }
+  return best;
+}
+
+/** Phase-info object for a manual event on a given date (shape ≈ phaseFor). */
+export function manualPhaseInfo(event, date) {
+  const p = PHASES[event.phase] || PHASES.period;
+  return {
+    phase: p.key,
+    label: p.label,
+    color: p.color,
+    manual: true,
+    day: daysBetween(event.start_date, date) + 1,
+    isPeriod: p.key === "period",
+    isOvulation: p.key === "ovulation",
+    isFertile: p.key === "fertile" || p.key === "ovulation",
+  };
+}
+
+// --- learning ---------------------------------------------------------------
+// Pure: given the user's logged history, derive updated cycle parameters.
+//   cycle_length  <- average gap between recent Day-1 starts
+//   period_length <- average duration of logged period segments
+//   luteal_length <- average (cycle_length - ovulation-day-in-cycle)
+// Falls back to the current value for anything not yet learnable.
+
+const _mean = (a) => a.reduce((x, y) => x + y, 0) / a.length;
+const _clampRound = (v, lo, hi) => Math.min(hi, Math.max(lo, Math.round(v)));
+
+/**
+ * @param starts  array of ISO Day-1 dates (any order)
+ * @param events  array of { phase, start_date, end_date }
+ * @param current { cycle_length, period_length, luteal_length }
+ */
+export function learnCycleParams(starts, events, current) {
+  let cycle_length = current.cycle_length;
+  let period_length = current.period_length;
+  let luteal_length = current.luteal_length || 14;
+
+  const asc = [...starts].sort();
+  if (asc.length >= 2) {
+    const gaps = [];
+    for (let i = 1; i < asc.length; i++) gaps.push(daysBetween(asc[i - 1], asc[i]));
+    const recent = gaps.slice(-6).filter(g => g >= 15 && g <= 60);
+    if (recent.length) cycle_length = _clampRound(_mean(recent), 15, 60);
+  }
+
+  const periodDurs = (events || []).filter(e => e.phase === "period")
+    .map(e => daysBetween(e.start_date, e.end_date) + 1)
+    .filter(d => d >= 1 && d <= 14);
+  if (periodDurs.length) period_length = _clampRound(_mean(periodDurs.slice(0, 6)), 1, 14);
+
+  const ovs = (events || []).filter(e => e.phase === "ovulation");
+  if (ovs.length && asc.length) {
+    const luts = [];
+    for (const ev of ovs) {
+      const anchor = [...asc].reverse().find(s => s <= ev.start_date);
+      if (!anchor) continue;
+      const ovDayInCycle = daysBetween(anchor, ev.start_date) + 1;
+      const lut = cycle_length - ovDayInCycle;
+      if (lut >= 9 && lut <= 17) luts.push(lut);
+    }
+    if (luts.length) luteal_length = _clampRound(_mean(luts.slice(0, 6)), 9, 17);
+  }
+
+  return { cycle_length, period_length, luteal_length };
 }

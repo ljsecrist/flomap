@@ -19,6 +19,10 @@ so the whole thing hosts for free on GitHub Pages.
   for friends who are on their period or fertile that day.
 - **Correct your cycle anytime** — update Day 1, keep a history of logged starts,
   and every prediction recalculates instantly.
+- **Manual overrides that learn** — log any phase (period, fertile, ovulation,
+  follicular, luteal) with start/end dates. Logged days override the calendar,
+  and FloMap learns your real `cycle_length`, `period_length`, and
+  `luteal_length` (ovulation timing) so next cycle's predictions get sharper.
 - **Friends** — add people by username, accept/decline requests, see each
   friend's current phase at a glance.
 - **Day threads** — tap any day to open a shared chat. Post text + photos,
@@ -40,6 +44,12 @@ so the whole thing hosts for free on GitHub Pages.
 1. In the Supabase dashboard open **SQL Editor → New query**.
 2. Copy the entire contents of [`supabase/schema.sql`](supabase/schema.sql),
    paste it, and click **Run**. You should see "Success. No rows returned."
+
+> **Already set up an earlier version?** Run the incremental migrations in
+> [`supabase/`](supabase/) that you haven't yet — currently
+> [`fix_permissions.sql`](supabase/fix_permissions.sql) (table grants) and
+> [`migrate_cycle_events.sql`](supabase/migrate_cycle_events.sql) (manual
+> phase logging + learning). They're safe to run more than once.
 
 ### 3. Add your keys
 1. In the dashboard open **Project Settings → API**.

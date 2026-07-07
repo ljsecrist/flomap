@@ -8,10 +8,7 @@ export function renderCalendar(host, ctx) {
   const wrap = el("div");
   host.append(wrap);
 
-  function computePhase(user, day) {
-    if (!ctx.hasCycle(user)) return null;
-    return ctx.phaseFor(state.anchors[user.id], user.cycle_length, user.period_length, day);
-  }
+  const computePhase = (user, day) => ctx.phaseOf(user, day);
 
   // ---- status card (top) -------------------------------------------------
   function statusCard() {
@@ -33,7 +30,7 @@ export function renderCalendar(host, ctx) {
       ]);
     }
     const today = new Date();
-    const info = ctx.phaseFor(anchor, me.cycle_length, me.period_length, today);
+    const info = ctx.phaseOf(me, today);
     const until = ctx.daysUntilNextPeriod(anchor, me.cycle_length, today);
     let sub;
     if (info.isPeriod) sub = `Period day ${info.day} • take it easy 🌸`;
@@ -41,7 +38,7 @@ export function renderCalendar(host, ctx) {
     else if (info.isFertile) sub = "Fertile window";
     else sub = `${until} day${until === 1 ? "" : "s"} until your next period`;
     return el("div.card.status-card", {}, [
-      el("h2", {}, [`Cycle day ${info.day} of ${me.cycle_length}`]),
+      el("h2", {}, [info.manual ? "Logged for today ✍️" : `Cycle day ${info.day} of ${me.cycle_length}`]),
       el("div.status-big", {}, [info.label]),
       el("div.status-sub", {}, [sub]),
     ]);
@@ -176,7 +173,9 @@ export function renderCalendar(host, ctx) {
         rows.push(ctx.el("div.psum-row", {}, [
           ctx.avatar(u, "sm"),
           ctx.el("span", { style: "flex:1" }, [u.id === state.user.id ? "You" : u.username]),
-          ctx.el("span.chip", { style: `background:${p.color}` }, [`${p.label} · d${p.day}`]),
+          ctx.el("span.chip", { style: `background:${p.color}` }, [
+            p.manual ? `${p.label} ✍️` : `${p.label} · d${p.day}`,
+          ]),
         ]));
       }
       if (rows.length) { phaseBox.append(ctx.el("div.small.muted", { style: "margin-bottom:4px" }, ["Cycle phases"]), ...rows); }

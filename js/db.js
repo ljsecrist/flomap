@@ -7,7 +7,7 @@
 // ============================================================================
 
 import { supabase } from "./config.js";
-import { toISO } from "./cycle.js";
+import { toISO, daysBetween, learnCycleParams } from "./cycle.js";
 
 function must(error) {
   if (error) throw new Error(error.message || "Database error");
@@ -110,6 +110,64 @@ export async function deletePeriodStart(userId, date) {
     .from("period_starts").delete()
     .eq("user_id", userId).eq("start_date", toISO(date));
   must(error);
+}
+
+// --- CYCLE EVENTS (manual overrides) ----------------------------------------
+
+/** All manually logged phase segments for a set of users, newest first. */
+export async function getCycleEvents(userIds) {
+  if (!userIds.length) return [];
+  const { data, error } = await supabase
+    .from("cycle_events").select("*")
+    .in("user_id", userIds)
+    .order("start_date", { ascending: false });
+  must(error);
+  return data;
+}
+
+/**
+ * Log a manual phase segment. Logging a "period" segment also records its start
+ * as a Day-1 anchor (so predictions re-anchor). Then re-learns cycle params.
+ */
+export async function addCycleEvent(userId, phase, startDate, endDate) {
+  let s = toISO(startDate), e = toISO(endDate);
+  if (e < s) [s, e] = [e, s];
+  const { data, error } = await supabase
+    .from("cycle_events")
+    .insert({ user_id: userId, phase, start_date: s, end_date: e })
+    .select().single();
+  must(error);
+  if (phase === "period") await logPeriodStart(userId, s);
+  await relearnCycle(userId);
+  return data;
+}
+
+export async function deleteCycleEvent(id) {
+  // fetch first so we can also tidy up the matching Day-1 anchor
+  const { data: row, error: e0 } = await supabase
+    .from("cycle_events").select("*").eq("id", id).maybeSingle();
+  must(e0);
+  const { error } = await supabase.from("cycle_events").delete().eq("id", id);
+  must(error);
+  if (row) {
+    if (row.phase === "period") await deletePeriodStart(row.user_id, row.start_date);
+    await relearnCycle(row.user_id);
+  }
+}
+
+/**
+ * Learn this user's cycle parameters from their logged history and save them.
+ * The math lives in cycle.learnCycleParams() (pure + unit-tested); this just
+ * fetches the history and persists the result. The more you log, the closer
+ * predictions track your real pattern.
+ */
+export async function relearnCycle(userId) {
+  const user = await getUser(userId);
+  if (!user) return;
+  const starts = (await getPeriodStarts([userId])).map(r => r.start_date);
+  const events = await getCycleEvents([userId]);
+  const params = learnCycleParams(starts, events, user);
+  await updateUser(userId, params);
 }
 
 // --- FRIENDSHIPS ------------------------------------------------------------

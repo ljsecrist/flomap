@@ -31,18 +31,24 @@ export function renderProfile(host, ctx) {
       const anchor = state.anchors[u.id];
       const box = el("div.card", {}, [ el("h2", {}, ["Your cycle"]) ]);
       if (anchor) {
-        const p = ctx.phaseFor(anchor, u.cycle_length, u.period_length, new Date());
+        const p = ctx.phaseOf(u, new Date());
         const next = ctx.nextPeriodStart(anchor, u.cycle_length, new Date());
         box.append(
-          el("div.psum-row", {}, [ el("span", { style: "flex:1" }, ["Current phase"]), el("span.chip", { style: `background:${p.color}` }, [p.label]) ]),
-          el("div.psum-row", {}, [ el("span", { style: "flex:1" }, ["Cycle day"]), el("b", {}, [`${p.day} / ${u.cycle_length}`]) ]),
+          el("div.psum-row", {}, [ el("span", { style: "flex:1" }, ["Current phase"]), el("span.chip", { style: `background:${p.color}` }, [p.manual ? `${p.label} ✍️` : p.label]) ]),
+          el("div.psum-row", {}, [ el("span", { style: "flex:1" }, ["Cycle length (learned)"]), el("b", {}, [`${u.cycle_length} days`]) ]),
+          el("div.psum-row", {}, [ el("span", { style: "flex:1" }, ["Period · luteal (learned)"]), el("b", {}, [`${u.period_length} · ${u.luteal_length || 14} days`]) ]),
           el("div.psum-row", {}, [ el("span", { style: "flex:1" }, ["Last logged Day 1"]), el("b", {}, [ctx.prettyDate(anchor)]) ]),
           el("div.psum-row", {}, [ el("span", { style: "flex:1" }, ["Next period (predicted)"]), el("b", {}, [ctx.prettyDate(ctx.toISO(next))]) ]),
         );
       } else {
         box.append(el("p.muted.small", {}, ["No Day 1 logged yet — add one to start predictions."]));
       }
-      box.append(el("button.btn", { style: "margin-top:12px", onclick: openDay1Sheet }, ["📅 Update Day 1"]));
+      box.append(
+        el("div.row", { style: "margin-top:12px" }, [
+          el("button.btn.auto", { onclick: openDay1Sheet }, ["📅 Update Day 1"]),
+          el("button.btn.auto.secondary", { onclick: openLogPhaseSheet }, ["✍️ Log a phase"]),
+        ])
+      );
       wrap.append(box);
     } else {
       wrap.append(el("div.card", {}, [
@@ -75,6 +81,7 @@ export function renderProfile(host, ctx) {
         save.disabled = true;
         try {
           await db.logPeriodStart(u.id, dateIn.value);
+          await db.relearnCycle(u.id);
           await ctx.reloadNetwork();
           toast("Day 1 updated ✔");
           close(); paint(); ctx.repaint();
@@ -92,7 +99,7 @@ export function renderProfile(host, ctx) {
           historyBox.append(el("div.list-item", {}, [
             el("span.grow", {}, [ctx.prettyDate(s.start_date)]),
             el("button.link-btn", { onclick: async () => {
-              try { await db.deletePeriodStart(u.id, s.start_date); await ctx.reloadNetwork(); loadHistory(); paint(); ctx.repaint(); toast("Removed"); }
+              try { await db.deletePeriodStart(u.id, s.start_date); await db.relearnCycle(u.id); await ctx.reloadNetwork(); loadHistory(); paint(); ctx.repaint(); toast("Removed"); }
               catch (e) { toast(e.message, true); }
             } }, ["Delete"]),
           ]));
@@ -102,6 +109,79 @@ export function renderProfile(host, ctx) {
       return el("div", {}, [
         el("p.small.muted", {}, ["Set the first day your current period started. We'll recalculate all predictions from here."]),
         el("div.field", { style: "margin-top:10px" }, [ el("label", {}, ["First day of period"]), dateIn ]),
+        err, save, historyBox,
+      ]);
+    });
+  }
+
+  // --- log / override a cycle phase --------------------------------------
+  function openLogPhaseSheet() {
+    openSheet("Log a cycle phase", (close) => {
+      const u = me();
+      const todayISO = ctx.toISO(new Date());
+      const PHASES = ["period", "fertile", "ovulation", "follicular", "luteal"];
+      const phaseSel = el("select", {}, PHASES.map(p =>
+        el("option", { value: p }, [ctx.PHASES[p].label])));
+      const startIn = el("input", { type: "date", value: todayISO });
+      const endIn = el("input", { type: "date", value: todayISO });
+      const err = el("div.error-msg");
+      const save = el("button.btn", {}, ["Save log"]);
+      const historyBox = el("div");
+
+      // Ovulation is usually a single day → keep end in sync until user edits it.
+      let endTouched = false;
+      endIn.addEventListener("input", () => { endTouched = true; });
+      const syncEnd = () => {
+        if (!endTouched || endIn.value < startIn.value) endIn.value = startIn.value;
+      };
+      startIn.addEventListener("input", syncEnd);
+      phaseSel.addEventListener("change", () => {
+        if (phaseSel.value === "ovulation") { endIn.value = startIn.value; endTouched = false; }
+      });
+
+      save.addEventListener("click", async () => {
+        err.textContent = "";
+        if (!startIn.value || !endIn.value) return err.textContent = "Pick start and end dates.";
+        if (endIn.value < startIn.value) return err.textContent = "End date can't be before start.";
+        save.disabled = true;
+        try {
+          await db.addCycleEvent(u.id, phaseSel.value, startIn.value, endIn.value);
+          await ctx.reloadNetwork();
+          toast("Logged — predictions updated ✔");
+          close(); paint(); ctx.repaint();
+        } catch (e) { err.textContent = e.message; save.disabled = false; }
+      });
+
+      loadHistory();
+      async function loadHistory() {
+        clear(historyBox);
+        let events = [];
+        try { events = await db.getCycleEvents([u.id]); } catch (e) {}
+        if (!events.length) return;
+        historyBox.append(el("div.small.muted", { style: "margin:16px 0 4px" }, ["Your logged phases"]));
+        for (const ev of events) {
+          const range = ev.start_date === ev.end_date
+            ? ctx.prettyDate(ev.start_date)
+            : `${ctx.prettyDate(ev.start_date)} → ${ctx.prettyDate(ev.end_date)}`;
+          historyBox.append(el("div.list-item", {}, [
+            el("span.chip", { style: `background:${ctx.PHASES[ev.phase].color};font-size:11px` }, [ctx.PHASES[ev.phase].label]),
+            el("span.grow.small", { style: "margin-left:8px" }, [range]),
+            el("button.link-btn", { onclick: async () => {
+              try { await db.deleteCycleEvent(ev.id); await ctx.reloadNetwork(); loadHistory(); paint(); ctx.repaint(); toast("Removed"); }
+              catch (e) { toast(e.message, true); }
+            } }, ["Delete"]),
+          ]));
+        }
+      }
+
+      return el("div", {}, [
+        el("p.small.muted", {}, ["Log what you actually experienced. It overrides the calendar for those days, and FloMap learns from it to sharpen next cycle's predictions."]),
+        el("div.field", { style: "margin-top:10px" }, [ el("label", {}, ["Phase"]), phaseSel ]),
+        el("div.row", {}, [
+          el("div.field", {}, [ el("label", {}, ["Start"]), startIn ]),
+          el("div.field", {}, [ el("label", {}, ["End"]), endIn ]),
+        ]),
+        el("p.small.muted", {}, ["Tip: logging your real period start & ovulation teaches it the most."]),
         err, save, historyBox,
       ]);
     });

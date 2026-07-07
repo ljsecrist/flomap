@@ -9,6 +9,7 @@ import { fileToDataURL, cropImageFile } from "./image.js";
 import {
   toISO, toDate, addDays, daysBetween, phaseFor, PHASES,
   dayInCycle, nextPeriodStart, daysUntilNextPeriod,
+  findManualPhase, manualPhaseInfo,
 } from "./cycle.js";
 import {
   el, clear, avatar, toast, openSheet, timeAgo,
@@ -23,12 +24,25 @@ const state = {
   friends: [],          // accepted friend user records
   network: [],          // [me, ...friends]
   anchors: {},          // userId -> latest period start (ISO) or null
+  events: {},           // userId -> [manual cycle_events]
   tab: "calendar",
   cal: { y: new Date().getFullYear(), m: new Date().getMonth() }, // viewed month
 };
 
 function hasCycle(u) {
   return u && u.gender !== "male" && state.anchors[u.id];
+}
+
+/**
+ * The phase to SHOW for a user on a date: a manual override if one covers the
+ * day, otherwise the learned prediction. Returns null if there's nothing to
+ * show (e.g. a male friend with no logs).
+ */
+function phaseOf(user, date) {
+  const manual = findManualPhase(state.events[user.id], date);
+  if (manual) return manualPhaseInfo(manual, date);
+  if (!hasCycle(user)) return null;
+  return phaseFor(state.anchors[user.id], user.cycle_length, user.period_length, date, user.luteal_length || 14);
 }
 
 // ============================================================================
@@ -84,12 +98,19 @@ function renderConnError(e) {
 async function loadNetwork() {
   state.friends = await db.getFriends(state.user.id);
   state.network = [state.user, ...state.friends];
-  const starts = await db.getPeriodStarts(state.network.map(u => u.id));
+  const ids = state.network.map(u => u.id);
+
+  const starts = await db.getPeriodStarts(ids);
   const anchors = {};
   for (const row of starts) { // newest first, so first seen = latest
     if (!(row.user_id in anchors)) anchors[row.user_id] = row.start_date;
   }
   state.anchors = anchors;
+
+  const events = await db.getCycleEvents(ids);
+  const byUser = {};
+  for (const e of events) (byUser[e.user_id] ||= []).push(e);
+  state.events = byUser;
 }
 
 // ============================================================================
@@ -364,7 +385,8 @@ function renderProfile(host) { _profile(host, ctx()); }
 function ctx() {
   return {
     state, db, auth,
-    phaseFor, dayInCycle, nextPeriodStart, daysUntilNextPeriod, daysBetween, addDays, toISO, toDate,
+    phaseFor, phaseOf, findManualPhase, manualPhaseInfo,
+    dayInCycle, nextPeriodStart, daysUntilNextPeriod, daysBetween, addDays, toISO, toDate,
     PHASES, el, clear, avatar, toast, openSheet, timeAgo, MONTHS, WEEKDAYS, prettyDate, escapeHTML,
     fileToDataURL, cropImageFile, clampInt, hasCycle,
     reloadNetwork: async () => { await loadNetwork(); },
