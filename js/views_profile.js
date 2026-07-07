@@ -32,13 +32,9 @@ export function renderProfile(host, ctx) {
       const box = el("div.card", {}, [ el("h2", {}, ["Your cycle"]) ]);
       if (anchor) {
         const p = ctx.phaseOf(u, new Date());
-        const next = ctx.nextPeriodStart(anchor, u.cycle_length, new Date());
         box.append(
           el("div.psum-row", {}, [ el("span", { style: "flex:1" }, ["Current phase"]), el("span.chip", { style: `background:${p.color}` }, [p.manual ? `${p.label} ✍️` : p.label]) ]),
-          el("div.psum-row", {}, [ el("span", { style: "flex:1" }, ["Cycle length (learned)"]), el("b", {}, [`${u.cycle_length} days`]) ]),
-          el("div.psum-row", {}, [ el("span", { style: "flex:1" }, ["Period · luteal (learned)"]), el("b", {}, [`${u.period_length} · ${u.luteal_length || 14} days`]) ]),
           el("div.psum-row", {}, [ el("span", { style: "flex:1" }, ["Last logged Day 1"]), el("b", {}, [ctx.prettyDate(anchor)]) ]),
-          el("div.psum-row", {}, [ el("span", { style: "flex:1" }, ["Next period (predicted)"]), el("b", {}, [ctx.prettyDate(ctx.toISO(next))]) ]),
         );
       } else {
         box.append(el("p.muted.small", {}, ["No Day 1 logged yet — add one to start predictions."]));
